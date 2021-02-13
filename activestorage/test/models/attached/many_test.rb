@@ -24,7 +24,7 @@ class ActiveStorage::ManyAttachedTest < ActiveSupport::TestCase
   end
 
   test "attaching existing blobs from signed IDs to an existing record" do
-    @user.highlights.attach create_blob(filename: "funky.jpg").signed_id, create_blob(filename: "town.jpg").signed_id
+    @user.highlights.attach create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload), create_blob(filename: "town.jpg").signed_id(purpose: :direct_upload)
     assert_equal "funky.jpg", @user.highlights.first.filename.to_s
     assert_equal "town.jpg", @user.highlights.second.filename.to_s
   end
@@ -64,7 +64,7 @@ class ActiveStorage::ManyAttachedTest < ActiveSupport::TestCase
     @user.name = "Tina"
     assert @user.changed?
 
-    @user.highlights.attach create_blob(filename: "funky.jpg").signed_id, create_blob(filename: "town.jpg").signed_id
+    @user.highlights.attach create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload), create_blob(filename: "town.jpg").signed_id(purpose: :direct_upload)
     assert_equal "funky.jpg", @user.highlights.first.filename.to_s
     assert_equal "town.jpg", @user.highlights.second.filename.to_s
     assert_not @user.highlights.first.persisted?
@@ -150,7 +150,7 @@ class ActiveStorage::ManyAttachedTest < ActiveSupport::TestCase
   end
 
   test "updating an existing record to attach existing blobs from signed IDs" do
-    @user.update! highlights: [ create_blob(filename: "funky.jpg").signed_id, create_blob(filename: "town.jpg").signed_id ]
+    @user.update! highlights: [ create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload), create_blob(filename: "town.jpg").signed_id(purpose: :direct_upload) ]
     assert_equal "funky.jpg", @user.highlights.first.filename.to_s
     assert_equal "town.jpg", @user.highlights.second.filename.to_s
   end
@@ -325,7 +325,7 @@ class ActiveStorage::ManyAttachedTest < ActiveSupport::TestCase
 
   test "attaching an existing blob from a signed ID to a new record" do
     User.new(name: "Jason").tap do |user|
-      user.highlights.attach create_blob(filename: "funky.jpg").signed_id
+      user.highlights.attach create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload)
       assert user.new_record?
       assert_equal "funky.jpg", user.highlights.first.filename.to_s
 
@@ -395,7 +395,7 @@ class ActiveStorage::ManyAttachedTest < ActiveSupport::TestCase
 
   test "creating a record with an existing blob from signed IDs attached" do
     user = User.create!(name: "Jason", highlights: [
-      create_blob(filename: "funky.jpg").signed_id, create_blob(filename: "town.jpg").signed_id ])
+      create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload), create_blob(filename: "town.jpg").signed_id(purpose: :direct_upload) ])
     assert_equal "funky.jpg", user.reload.highlights.first.filename.to_s
     assert_equal "town.jpg", user.reload.highlights.second.filename.to_s
   end
@@ -667,11 +667,32 @@ class ActiveStorage::ManyAttachedTest < ActiveSupport::TestCase
     end
   end
 
+  test "using signed IDs with blob_id purpose doesn't attach the blobs if the flag ignore_blob_id_purpose_for_direct_uploads is on" do
+    ignore_blob_id_for_direct_uploads do
+      assert_raises(ActiveSupport::MessageVerifier::InvalidSignature) do
+        @user.highlights.attach create_blob(filename: "funky.jpg").signed_id(purpose: :blob_id), create_blob(filename: "town.jpg").signed_id(purpose: :blob_id)
+      end
+    end
+  end
+
+  test "using signed IDs with blob_id purpose attaches the blobs if the flag ignore_blob_id_purpose_for_direct_uploads is off" do
+    @user.highlights.attach create_blob(filename: "funky.jpg").signed_id(purpose: :blob_id), create_blob(filename: "town.jpg").signed_id(purpose: :blob_id)
+    assert_equal "funky.jpg", @user.highlights.first.filename.to_s
+    assert_equal "town.jpg", @user.highlights.second.filename.to_s
+  end
+
   private
     def append_on_assign
       ActiveStorage.replace_on_assign_to_many, previous = false, ActiveStorage.replace_on_assign_to_many
       yield
     ensure
       ActiveStorage.replace_on_assign_to_many = previous
+    end
+
+    def ignore_blob_id_for_direct_uploads
+      ActiveStorage.ignore_blob_id_purpose_for_direct_uploads, previous = true, ActiveStorage.ignore_blob_id_purpose_for_direct_uploads
+      yield
+    ensure
+      ActiveStorage.ignore_blob_id_purpose_for_direct_uploads = previous
     end
 end

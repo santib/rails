@@ -25,15 +25,15 @@ class ActiveStorage::OneAttachedTest < ActiveSupport::TestCase
   end
 
   test "attaching an existing blob from a signed ID to an existing record" do
-    @user.avatar.attach create_blob(filename: "funky.jpg").signed_id
+    @user.avatar.attach create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload)
     assert_equal "funky.jpg", @user.avatar.filename.to_s
   end
 
   test "attaching an existing blob from a signed ID passes record" do
     blob = create_blob(filename: "funky.jpg")
-    arguments = [blob.signed_id, record: @user]
-    assert_called_with(ActiveStorage::Blob, :find_signed!, arguments, returns: blob) do
-      @user.avatar.attach blob.signed_id
+    arguments = [blob.signed_id(purpose: :direct_upload), record: @user, purpose: :direct_upload]
+    assert_called_with(ActiveStorage::Blob, :find_signed, arguments, returns: blob) do
+      @user.avatar.attach blob.signed_id(purpose: :direct_upload)
     end
   end
 
@@ -85,7 +85,7 @@ class ActiveStorage::OneAttachedTest < ActiveSupport::TestCase
     @user.name = "Tina"
     assert @user.changed?
 
-    @user.avatar.attach create_blob(filename: "funky.jpg").signed_id
+    @user.avatar.attach create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload)
     assert_equal "funky.jpg", @user.avatar.filename.to_s
     assert_not @user.avatar.persisted?
     assert @user.will_save_change_to_name?
@@ -126,7 +126,7 @@ class ActiveStorage::OneAttachedTest < ActiveSupport::TestCase
   end
 
   test "updating an existing record to attach an existing blob from a signed ID" do
-    @user.update! avatar: create_blob(filename: "funky.jpg").signed_id
+    @user.update! avatar: create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload)
     assert_equal "funky.jpg", @user.avatar.filename.to_s
   end
 
@@ -347,7 +347,7 @@ class ActiveStorage::OneAttachedTest < ActiveSupport::TestCase
 
   test "attaching an existing blob from a signed ID to a new record" do
     User.new(name: "Jason").tap do |user|
-      user.avatar.attach create_blob(filename: "funky.jpg").signed_id
+      user.avatar.attach create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload)
       assert user.new_record?
       assert_equal "funky.jpg", user.avatar.filename.to_s
 
@@ -396,7 +396,7 @@ class ActiveStorage::OneAttachedTest < ActiveSupport::TestCase
   end
 
   test "creating a record with an existing blob from a signed ID attached" do
-    user = User.create!(name: "Jason", avatar: create_blob(filename: "funky.jpg").signed_id)
+    user = User.create!(name: "Jason", avatar: create_blob(filename: "funky.jpg").signed_id(purpose: :direct_upload))
     assert_equal "funky.jpg", user.reload.avatar.filename.to_s
   end
 
@@ -629,4 +629,33 @@ class ActiveStorage::OneAttachedTest < ActiveSupport::TestCase
 
     assert_match(/Cannot find variant :unknown for User#avatar_with_variants/, error.message)
   end
+
+  test "attaching an existing blob from a signed ID with blob_id purpose passes record" do
+    blob = create_blob(filename: "funky.jpg")
+    arguments = [blob.signed_id, record: @user, purpose: :blob_id]
+    assert_called_with(ActiveStorage::Blob, :find_signed!, arguments, returns: blob) do
+      @user.avatar.attach blob.signed_id
+    end
+  end
+
+  test "using a signed ID with blob_id purpose does not attach the blob if flag ignore_blob_id_purpose_for_direct_uploads is on" do
+    ignore_blob_id_for_direct_uploads do
+      assert_raises(ActiveSupport::MessageVerifier::InvalidSignature) do
+        @user.avatar.attach create_blob(filename: "funky.jpg").signed_id(purpose: :blob_id)
+      end
+    end
+  end
+
+  test "using a signed ID with blob_id purpose attaches the blob if flag ignore_blob_id_purpose_for_direct_uploads is off" do
+    @user.avatar.attach create_blob(filename: "funky.jpg").signed_id(purpose: :blob_id)
+    assert_equal "funky.jpg", @user.avatar.filename.to_s
+  end
+
+  private
+    def ignore_blob_id_for_direct_uploads
+      ActiveStorage.ignore_blob_id_purpose_for_direct_uploads, previous = true, ActiveStorage.ignore_blob_id_purpose_for_direct_uploads
+      yield
+    ensure
+      ActiveStorage.ignore_blob_id_purpose_for_direct_uploads = previous
+    end
 end
