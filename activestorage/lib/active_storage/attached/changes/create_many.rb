@@ -2,10 +2,11 @@
 
 module ActiveStorage
   class Attached::Changes::CreateMany #:nodoc:
-    attr_reader :name, :record, :attachables
 
-    def initialize(name, record, attachables)
-      @name, @record, @attachables = name, record, Array(attachables)
+    attr_reader :name, :record, :attachables, :for_upload
+
+    def initialize(name, record, attachables, for_upload = nil)
+      @name, @record, @attachables, @for_upload = name, record, Array(attachables), Array(for_upload)
       blobs.each(&:identify_without_saving)
       attachments
     end
@@ -19,7 +20,7 @@ module ActiveStorage
     end
 
     def upload
-      subchanges.each(&:upload)
+      for_upload.each(&:upload)
     end
 
     def save
@@ -29,7 +30,9 @@ module ActiveStorage
 
     private
       def subchanges
-        @subchanges ||= attachables.collect { |attachable| build_subchange_from(attachable) }
+        @subchanges ||= attachables.collect { |attachable| build_subchange_from(attachable) }.tap do |subs|
+          @for_upload += subs.reject { |sub| sub.attachable.is_a?(ActiveStorage::Blob) }
+        end
       end
 
       def build_subchange_from(attachable)
