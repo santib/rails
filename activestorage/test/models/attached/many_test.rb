@@ -366,6 +366,44 @@ class ActiveStorage::ManyAttachedTest < ActiveSupport::TestCase
     assert_not ActiveStorage::Blob.service.exist?(@user.highlights.second.key)
   end
 
+  test "attaching blobs to an invalid record multiple times, keeps them in memory" do
+    @user.update_attribute(:name, nil)
+    assert_not @user.valid?
+    assert_not @user.highlights.attached?
+
+    @user.highlights.attach create_blob(filename: "racecar.jpg")
+    assert @user.highlights.attached?
+    assert_equal 1, @user.highlights.count
+    assert_equal "racecar.jpg", @user.highlights.first.filename.to_s
+
+    @user.highlights.attach create_blob(filename: "funky.jpg"), create_blob(filename: "town.jpg")
+    assert @user.highlights.attached?
+    assert_equal 3, @user.highlights.count
+    assert_equal "racecar.jpg", @user.highlights.first.filename.to_s
+    assert_equal "funky.jpg", @user.highlights.second.filename.to_s
+    assert_equal "town.jpg", @user.highlights.third.filename.to_s
+
+    @user.reload
+    assert_not @user.highlights.attached?
+  end
+
+  test "attaching blobs to an invalid record, can be saved afterwards" do
+    @user.update_attribute(:name, nil)
+    assert_not @user.valid?
+    assert_not @user.highlights.attached?
+
+    @user.highlights.attach create_blob(filename: "racecar.jpg")
+    @user.highlights.attach create_blob(filename: "funky.jpg"), create_blob(filename: "town.jpg")
+
+    @user.update!(name: "John")
+    @user.reload
+    assert @user.highlights.attached?
+    assert_equal 3, @user.highlights.count
+    assert_equal "racecar.jpg", @user.highlights.first.filename.to_s
+    assert_equal "funky.jpg", @user.highlights.second.filename.to_s
+    assert_equal "town.jpg", @user.highlights.third.filename.to_s
+  end
+
   test "updating an existing record to attach one new blob and one previously-attached blob" do
     [ create_blob(filename: "funky.jpg"), create_blob(filename: "town.jpg") ].tap do |blobs|
       @user.highlights.attach blobs.first

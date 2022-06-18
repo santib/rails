@@ -170,6 +170,36 @@ class ActiveStorage::OneAttachedTest < ActiveSupport::TestCase
     assert_not ActiveStorage::Blob.service.exist?(@user.avatar.key)
   end
 
+  test "attaching a blob to an invalid record, keeps attachment in memory" do
+    @user.update_attribute(:name, nil)
+    assert_not @user.valid?
+    assert_not @user.avatar.attached?
+
+    @user.avatar.attach create_blob(filename: "funky.jpg")
+    assert @user.avatar.attached?
+    assert_equal "funky.jpg", @user.avatar.filename.to_s
+
+    @user.avatar.attach create_blob(filename: "racecar.jpg")
+    assert @user.avatar.attached?
+    assert_equal "racecar.jpg", @user.avatar.filename.to_s
+
+    @user.reload
+    assert_not @user.avatar.attached?
+  end
+
+  test "attaching a blob to an invalid record, can be saved afterwards" do
+    @user.update_attribute(:name, nil)
+    assert_not @user.valid?
+    assert_not @user.avatar.attached?
+
+    @user.avatar.attach create_blob(filename: "funky.jpg")
+
+    @user.update!(name: "John")
+    @user.reload
+    assert @user.avatar.attached?
+    assert_equal "funky.jpg", @user.avatar.filename.to_s
+  end
+
   test "successfully replacing an existing, dependent attachment on an existing record" do
     create_blob(filename: "funky.jpg").tap do |old_blob|
       @user.avatar.attach old_blob
