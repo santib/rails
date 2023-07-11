@@ -8,6 +8,9 @@ on:
     types: [opened]
   issue_comment:
     types: [created]
+  # Trigger the workflow on new pull request review comment
+  pull_request_review_comment:
+    types: [created]
 
 permissions:
   issues: write
@@ -22,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       # The action will only run if the description or comments mentions @rs-gpt-review
-      - uses: rootstrap/rs-gpt-review@v2
+      - uses: rootstrap/rs-gpt-review@2b784f4b5735399847366faf26de27c010a670cf
         name: rs-gpt-review
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
